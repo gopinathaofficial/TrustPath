@@ -126,6 +126,20 @@ def test_risk_adjustment_clamped_and_signals_deduped():
     assert len(texts) == len(set(texts)) <= analyzer.MAX_SIGNALS
 
 
+def test_llm_output_is_normalised_not_rejected():
+    out = openrouter.LLMOut.model_validate({
+        "checks": {"Company": "PASS", "posting": "caution", "recruiter": "pass|warn", "channel": "fail", "process": "warn"},
+        "signals": [{"type": "Warning", "text": "w"}, {"type": "neutral", "text": "dropped"}]
+                   + [{"type": "red", "text": f"s{i}"} for i in range(12)],
+        "next_steps": [{"title": "t", "detail": "d"}] * 6,
+        "draft_message": "x" * 2000,
+        "risk_adjustment": 0,
+    })
+    assert out.checks == {"company": "pass", "posting": "warn", "recruiter": "warn", "channel": "fail", "process": "warn"}
+    assert len(out.signals) == 8 and len(out.next_steps) == 4 and len(out.draft_message) == 800
+    assert out.signals[0].type == "red" and all(s.text != "dropped" for s in out.signals)
+
+
 def test_prompt_tags_are_stripped(monkeypatch):
     sent = {}
 

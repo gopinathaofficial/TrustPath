@@ -105,6 +105,12 @@ def test_posting_vague():
     assert "posting.vague" in _fired(_eval(description="Hiring now. Good pay. DM for details."))
 
 
+def test_brand_with_personal_email_fails_company():
+    outcome = _eval(company="Amazon Careers", recruiter_email="amazon.hr.jobs@gmail.com")
+    assert outcome.results["company"].status == "fail"
+    assert _eval(company="Acme", recruiter_email="acme.hr@gmail.com").results["company"].status == "pass"
+
+
 def test_company_missing_does_not_cap_verdict():
     outcome = _eval(company="")
     assert "company.missing" in _fired(outcome)
@@ -127,6 +133,17 @@ def test_domain_intel_skips_free_email(monkeypatch):
     assert domain_intel.investigate(AnalyzeRequest(description=CLEAN, recruiter_email="x@gmail.com")) is None
     assert domain_intel.investigate(AnalyzeRequest(description=CLEAN, recruiter_email="not an email")) is None
     assert called == []
+
+
+_REAL_CHECK_DOMAIN = tools.check_domain
+
+
+def test_check_domain_accepts_email_and_url(monkeypatch):
+    monkeypatch.setattr(tools.socket, "getaddrinfo", lambda *a, **k: [])
+    monkeypatch.setattr(tools.httpx, "get", lambda *a, **k: (_ for _ in ()).throw(tools.httpx.ConnectError("offline")))
+    for value in ("jane.doe@stripe.com", "https://www.stripe.com/jobs/123", "WWW.Stripe.com"):
+        info, _ = _REAL_CHECK_DOMAIN(value)
+        assert info.get("domain") == "stripe.com", value
 
 
 def test_domain_intel_flags_dead_and_young_domains(monkeypatch):
