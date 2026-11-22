@@ -4,6 +4,7 @@ The model investigates with tools (domain check, page fetch) for up to MAX_ROUND
 a JSON verdict. Every tool call is recorded in `trail` so the user can see what the agent did."""
 import json
 import logging
+import re
 from typing import Dict, List, Optional, Tuple
 
 import httpx
@@ -39,7 +40,8 @@ class LLMOut(BaseModel):
 
 
 def _chat(messages: list, with_tools: bool) -> dict:
-    body: dict = {"model": settings.OPENROUTER_MODEL, "temperature": 0, "messages": messages}
+    body: dict = {"model": settings.OPENROUTER_MODEL, "temperature": 0, "messages": messages,
+                  "max_tokens": settings.LLM_MAX_TOKENS}
     if with_tools:
         body.update(tools=tools.SCHEMAS, tool_choice="auto")
     r = httpx.post(f"{settings.OPENROUTER_BASE_URL}/chat/completions",
@@ -53,12 +55,20 @@ def _parse(content: str) -> LLMOut:
     return LLMOut.model_validate_json(content[content.index("{"): content.rindex("}") + 1])
 
 
+_TAG_RE = re.compile(r"</?\s*(posting|company|recruiter_email|source|title)\s*>", re.IGNORECASE)
+
+
+def _untag(value: str) -> str:
+    """Stop posting text from closing our delimiter tags and smuggling in instructions."""
+    return _TAG_RE.sub("", value or "")
+
+
 def run_agent(req: AnalyzeRequest, evidence: str = "") -> Optional[Tuple[LLMOut, List[TrailStep]]]:
     if not settings.OPENROUTER_API_KEY:
         return None
-    user = (f"<company>{req.company}</company><recruiter_email>{req.recruiter_email}</recruiter_email>"
-            f"<source>{req.source}</source><title>{req.title}</title>"
-            f"<posting>{req.description[:6000]}</posting>\nAlready checked: {evidence or 'nothing'}")
+    user = (f"<company>{_untag(req.company)}</company><recruiter_email>{_untag(req.recruiter_email)}</recruiter_email>"
+            f"<source>{_untag(req.source)}</source><title>{_untag(req.title)}</title>"
+            f"<posting>{_untag(req.description[:6000])}</posting>\nAlready checked: {evidence or 'nothing'}")
     messages: list = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}]
     trail: List[TrailStep] = []
     try:
@@ -81,3 +91,21 @@ def run_agent(req: AnalyzeRequest, evidence: str = "") -> Optional[Tuple[LLMOut,
     except (httpx.HTTPError, KeyError, IndexError, ValueError, ValidationError) as e:
         log.warning("Agent step skipped: %s", type(e).__name__)  # never log posting or key
     return None
+
+
+class LLMUnavailable(RuntimeError):
+    pass
+
+
+def complete_chat(messages: list) -> str:
+    """Plain chat completion (no tools) for the assistant endpoint."""
+    if not settings.OPENROUTER_API_KEY:
+        raise LLMUnavailable("OPENROUTER_API_KEY is not set")
+    try:
+        content = _chat(messages, with_tools=False).get("content")
+    except (httpx.HTTPError, KeyError, IndexError, ValueError) as e:
+        log.warning("Chat skipped: %s", type(e).__name__)
+        raise LLMUnavailable("The AI service is unavailable") from e
+    if not content:
+        raise LLMUnavailable("The AI service returned an empty reply")
+    return content
