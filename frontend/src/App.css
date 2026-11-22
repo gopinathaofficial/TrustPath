@@ -5,20 +5,20 @@
 
 /* ── Design tokens ────────────────────────────────────────── */
 :root {
-  /* Backgrounds */
-  --bg:       #080f0a;
-  --surface:  #0d1a10;
-  --card:     #111f14;
-  --card2:    #152019;
-  --border:   #1e3323;
-  --border-hi:#2a4a30;
+  /* Backgrounds — neutral charcoal, no green tint */
+  --bg:       #0d0f12;
+  --surface:  #131619;
+  --card:     #1a1d22;
+  --card2:    #1f2228;
+  --border:   #2a2f38;
+  --border-hi:#363d48;
 
-  /* Green accent palette */
-  --accent:      #22c55e;   /* green-500  */
-  --accent-hi:   #4ade80;   /* green-400  */
-  --accent-dim:  #052e16;   /* green-950  */
-  --accent-glow: rgba(34, 197, 94, 0.18);
-  --accent-glow2:rgba(34, 197, 94, 0.08);
+  /* Emerald accent — used sparingly */
+  --accent:      #22c55e;
+  --accent-hi:   #4ade80;
+  --accent-dim:  #052e16;
+  --accent-glow: rgba(34, 197, 94, 0.14);
+  --accent-glow2:rgba(34, 197, 94, 0.06);
 
   /* Status */
   --green:    #22c55e;
@@ -28,11 +28,11 @@
   --yellow:   #f59e0b;
   --yellow-bg:rgba(245,158,11,0.1);
 
-  /* Text */
-  --text:   #e2f0e5;
-  --text-2: #7da889;
-  --text-3: #3d6645;
-  --muted:  #5a8065;
+  /* Text — neutral white/grey, no green tint */
+  --text:   #f0f2f5;
+  --text-2: #8b97ad;
+  --text-3: #4a5568;
+  --muted:  #6b7a90;
 
   --radius: 14px;
 }
@@ -316,7 +316,7 @@ body {
 .nav {
   display: flex; align-items: center; justify-content: space-between;
   padding: 0 32px; height: 60px;
-  background: rgba(8,15,10,0.88);
+  background: rgba(13,15,18,0.9);
   backdrop-filter: blur(14px) saturate(160%);
   border-bottom: 1px solid var(--border);
   position: sticky; top: 0; z-index: 100;
