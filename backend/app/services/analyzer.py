@@ -21,7 +21,7 @@ def _verdict(score: int) -> str:
     return "real" if score >= 75 else "suspicious" if score >= 45 else "fake"
 
 
-def analyze(req: AnalyzeRequest) -> AnalyzeResponse:
+def analyze(req: AnalyzeRequest, use_agent: bool = True) -> AnalyzeResponse:
     r = rules.evaluate(req)
 
     # Deterministic first step: investigate the recruiter's domain (also works with no LLM).
@@ -35,7 +35,7 @@ def analyze(req: AnalyzeRequest) -> AnalyzeResponse:
         trail.append(TrailStep(tool="check_domain", input=domain, finding=finding))
         evidence = finding
 
-    agent = openrouter.run_agent(req, evidence)
+    agent = openrouter.run_agent(req, evidence) if use_agent else None
     llm = None
     if agent:
         llm, agent_trail = agent

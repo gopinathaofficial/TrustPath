@@ -117,92 +117,32 @@ const ANALYZE_STEPS = [
   { text: 'Calculating trust score…',          Icon: Lock       },
 ]
 
-const RED_FLAG_WORDS = ['whatsapp','telegram','gmail','deposit','training fee','pay','wire transfer','western union','urgent','work from home earn']
-const OFF_PLATFORM   = ['WhatsApp','Telegram','Email']
+const CHECK_ICONS  = { company: Building2, posting: FileText, recruiter: User, channel: MessageSquare, process: Settings }
+const STATUS_LABEL = { pass: 'PASSED', warn: 'WARNING', fail: 'FAILED' }
 
-function computeResult(form) {
-  const desc = (form.description || '').toLowerCase()
-  const flagCount = RED_FLAG_WORDS.filter(f => desc.includes(f)).length
-  const offPlatform = OFF_PLATFORM.includes(form.source)
-  let verdict, pct
-  if (flagCount >= 2 || offPlatform) {
-    verdict = 'fake'; pct = 14 + Math.floor(Math.random() * 15)
-  } else if (flagCount === 1) {
-    verdict = 'suspicious'; pct = 48 + Math.floor(Math.random() * 15)
-  } else {
-    verdict = 'real'; pct = Math.min(82 + Math.floor(Math.random() * 15), 97)
-  }
-  return { verdict, pct, title: form.title || 'Job Posting', company: form.company || 'Unknown Company', recruiter: form.recruiter }
-}
-
-function getChecks(verdict, hasRecruiter) {
-  if (verdict === 'fake') return [
-    { Icon: Building2,    name: 'Company Identity',  status: 'FAILED',     cls: 'fail' },
-    { Icon: FileText,     name: 'Job Posting',        status: 'RED FLAGS',  cls: 'fail' },
-    { Icon: User,         name: 'Recruiter',          status: 'FAKE',       cls: 'fail' },
-    { Icon: MessageSquare,name: 'Communication',      status: 'SUSPICIOUS', cls: 'fail' },
-    { Icon: Settings,     name: 'Hiring Process',     status: 'ABNORMAL',   cls: 'fail' },
-  ]
-  if (verdict === 'suspicious') return [
-    { Icon: Building2,    name: 'Company Identity',  status: 'PARTIAL',    cls: 'warn' },
-    { Icon: FileText,     name: 'Job Posting',        status: 'WARNINGS',   cls: 'warn' },
-    { Icon: User,         name: 'Recruiter',          status: 'UNVERIFIED', cls: 'warn' },
-    { Icon: MessageSquare,name: 'Communication',      status: 'UNUSUAL',    cls: 'warn' },
-    { Icon: Settings,     name: 'Hiring Process',     status: 'NORMAL',     cls: 'pass' },
-  ]
-  return [
-    { Icon: Building2,    name: 'Company Identity',  status: 'VERIFIED',   cls: 'pass' },
-    { Icon: FileText,     name: 'Job Posting',        status: 'CLEAN',      cls: 'pass' },
-    { Icon: User,         name: 'Recruiter',          status: hasRecruiter ? 'VERIFIED' : 'UNVERIFIED', cls: hasRecruiter ? 'pass' : 'warn' },
-    { Icon: MessageSquare,name: 'Communication',      status: 'NORMAL',     cls: 'pass' },
-    { Icon: Settings,     name: 'Hiring Process',     status: 'NORMAL',     cls: 'pass' },
-  ]
-}
-
-function getSignals(verdict) {
-  if (verdict === 'fake') return [
-    { dot: 'red', text: 'No verifiable company registration found' },
-    { dot: 'red', text: 'Recruiter using personal/free email domain' },
-    { dot: 'red', text: 'Upfront payment or deposit requested' },
-    { dot: 'red', text: 'Communication moved off official platform' },
-    { dot: 'red', text: 'Unusually high salary with no skill requirements' },
-  ]
-  if (verdict === 'suspicious') return [
-    { dot: 'red',   text: 'Recruiter domain could not be fully verified' },
-    { dot: 'red',   text: 'Some language patterns raise caution flags' },
-    { dot: 'green', text: 'Company appears to be a real registered entity' },
-    { dot: 'green', text: 'Job responsibilities are specific and realistic' },
-    { dot: 'green', text: 'No payment requests detected in description' },
-  ]
-  return [
-    { dot: 'green', text: 'Specific role requirements listed' },
-    { dot: 'green', text: 'Realistic and market-aligned salary range' },
-    { dot: 'green', text: 'Verifiable company name and location' },
-    { dot: 'green', text: 'Professional language and clear responsibilities' },
-    { dot: 'green', text: 'Standard benefits package described' },
-  ]
-}
-
-function getSteps(verdict) {
-  if (verdict === 'fake') return [
-    { n: '!', title: 'Do NOT apply or respond',  sub: 'Engaging further risks financial loss or identity theft.' },
-    { n: '2', title: 'Report the posting',        sub: 'Flag it on the platform where you found it.' },
-    { n: '3', title: 'Warn others',               sub: 'Share this result to protect fellow job seekers.' },
-  ]
-  if (verdict === 'suspicious') return [
-    { n: '1', title: 'Verify via official channels',   sub: 'Call the company directly using numbers from their official website.' },
-    { n: '2', title: "Check the recruiter's LinkedIn", sub: 'Confirm they are listed as an employee of the company.' },
-    { n: '3', title: 'Proceed with caution',           sub: 'Do not share sensitive documents until identity is confirmed.' },
-  ]
-  return [
-    { n: '1', title: 'Research the company',    sub: "Check Glassdoor, LinkedIn, and the company's official site." },
-    { n: '2', title: 'Tailor your application', sub: 'Customize your CV and cover letter to match the requirements.' },
-    { n: '3', title: 'Apply with confidence',   sub: 'This looks like a legitimate opportunity worth pursuing.' },
-  ]
+async function analyze(form) {
+  const res = await fetch('/api/v1/analyze', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      description: [form.description, form.salary && `Salary: ${form.salary}`, form.url && `Link: ${form.url}`].filter(Boolean).join('\n'),
+      title: form.title, company: form.company, recruiter_email: form.recruiter, source: form.source,
+    }),
+  })
+  if (!res.ok) throw new Error(res.status === 422 ? 'Please paste the job description.' : 'Analysis service error.')
+  const d = await res.json()
+  return { ...d, pct: d.trust_score, title: form.title || 'Job Posting', company: form.company || 'Unknown Company', recruiter: form.recruiter }
 }
 
 /* ─── HOME PAGE ─────────────────────────────────────────── */
-function HomePage({ onNavigate }) {
+async function connectGmail() {
+  const res = await fetch('/api/v1/gmail/auth-url')
+  if (!res.ok) throw new Error(res.status === 503 ? 'Gmail scan is not configured on this server yet.' : 'Could not start Gmail sign-in.')
+  window.location.href = (await res.json()).url
+}
+
+function HomePage({ onNavigate, gmailError }) {
+  const [gmailMsg, setGmailMsg] = useState(gmailError || '')
   const [quickDesc,      setQuickDesc]      = useState('')
   const [quickCompany,   setQuickCompany]   = useState('')
   const [quickRecruiter, setQuickRecruiter] = useState('')
@@ -230,7 +170,7 @@ function HomePage({ onNavigate }) {
         <div className="hero-badge anim-badge">
           <span className="badge-pulse" />
           <Sparkles size={12} className="badge-icon" />
-          AI-Powered · 97.4% Accuracy
+          AI-Assisted · Rules-Backed
         </div>
         <h1 className="hero-h1">
           Stop <span className="accent glow-text">Fake Jobs</span><br />
@@ -259,8 +199,16 @@ function HomePage({ onNavigate }) {
           </div>
         </div>
 
+        <div className="gmail-cta">
+          <button className="btn-secondary" onClick={() => connectGmail().catch(e => setGmailMsg(e.message))}>
+            ✉️ Scan my Gmail for fake job emails
+          </button>
+          <span className="gmail-note">Read-only access. Nothing is stored; disconnect any time.</span>
+          {gmailMsg && <div className="disclaimer" role="alert">❌ {gmailMsg}</div>}
+        </div>
+
         <div className="hero-trust">
-          {[['No signup required', CheckCircle], ['Results in <10 seconds', Clock], ['Free forever', Sparkles]].map(([t, Icon]) => (
+          {[['No signup required', CheckCircle], ['Rules + AI agent', Sparkles], ['Nothing stored', CheckCircle]].map(([t, Icon]) => (
             <span key={t} className="trust-pill">
               <Icon size={11} className="trust-pill-icon" />
               <span>{t}</span>
@@ -273,9 +221,9 @@ function HomePage({ onNavigate }) {
       <div className="stats-strip">
         {[
           { val: <Counter target={1} suffix=" in 7" />, lbl: 'Job postings are fraudulent', Icon: TrendingUp },
-          { val: <><Counter target={97} suffix="." /><span>4%</span></>,                     lbl: 'Model accuracy',           Icon: ShieldCheck   },
+          { val: <span>AI + Rules</span>,                                                      lbl: 'Hybrid detection engine',  Icon: ShieldCheck   },
           { val: <Counter target={5} />,                                                      lbl: 'Independent checks',       Icon: CheckCircle   },
-          { val: <span>&lt;10s</span>,                                                         lbl: 'Average analysis time',    Icon: Clock         },
+          { val: <span>Seconds</span>,                                                         lbl: 'Typical analysis time',    Icon: Clock         },
         ].map((s, i) => (
           <Reveal key={i} delay={i * 80}>
             <div className="stat">
@@ -310,6 +258,59 @@ function HomePage({ onNavigate }) {
   )
 }
 
+/* ─── INBOX PAGE (Gmail scan) ─────────────────────────────── */
+const VERDICT_LABEL = { real: 'Looks OK', suspicious: 'Suspicious', fake: 'Likely fake' }
+
+function InboxPage({ onNavigate }) {
+  const [emails, setEmails] = useState(null)
+  const [error,  setError]  = useState('')
+
+  useEffect(() => {
+    fetch('/api/v1/gmail/scan', { method: 'POST' })
+      .then(r => { if (!r.ok) throw new Error(r.status === 401 ? 'Your Gmail session expired. Connect again from the home page.' : 'Could not read Gmail.'); return r.json() })
+      .then(setEmails)
+      .catch(e => setError(e.message))
+  }, [])
+
+  async function disconnect() {
+    await fetch('/api/v1/gmail/disconnect', { method: 'POST' })
+    onNavigate('home')
+  }
+
+  const flagged = emails ? emails.filter(e => e.verdict !== 'real').length : 0
+
+  return (
+    <div id="page-inbox">
+      <div className="detect-page">
+        <div className="breadcrumb">Home / <span>Gmail scan</span></div>
+        <h2>Job emails in your inbox</h2>
+        <p className="sub">Last 30 days, including Spam. Quick check with rules and domain age; use the agent for a full investigation.</p>
+        {error && <div className="disclaimer" role="alert">❌ {error}</div>}
+        {!emails && !error && <div className="disclaimer">Scanning your mailbox…</div>}
+        {emails && <div className="disclaimer">Found {emails.length} job-related emails. {flagged} look suspicious or fake.</div>}
+        {emails && emails.map(e => (
+          <div key={e.id} className={`inbox-item inbox-item--${e.verdict}`}>
+            <div className="inbox-main">
+              <div className="inbox-subject">{e.subject || '(no subject)'}</div>
+              <div className="inbox-from">{e.from_name} &lt;{e.from_email}&gt;</div>
+              {e.red_flags.map((f, i) => <div key={i} className="inbox-flag">• {f}</div>)}
+            </div>
+            <div className="inbox-side">
+              <span className={`verdict-label verdict-label--${e.verdict}`}>{VERDICT_LABEL[e.verdict]} · {e.trust_score}</span>
+              <button className="btn-secondary" onClick={() => onNavigate('detect', { title: e.subject, company: e.from_name, recruiter: e.from_email, description: e.description, autoStart: true })}>
+                Investigate
+              </button>
+            </div>
+          </div>
+        ))}
+        <div className="action-row" style={{ marginTop: 20 }}>
+          <button className="btn-secondary" onClick={disconnect}>Disconnect Gmail</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /* ─── DETECT PAGE ─────────────────────────────────────────── */
 function DetectPage({ initialData, onResult }) {
   const [form, setForm] = useState({
@@ -324,21 +325,28 @@ function DetectPage({ initialData, onResult }) {
   const [analyzing, setAnalyzing] = useState(false)
   const [stepIdx,   setStepIdx]   = useState(0)
   const [progress,  setProgress]  = useState(0)
+  const [error,     setError]     = useState('')
 
   useEffect(() => { if (initialData?.autoStart) runAnalysis() }, [])
 
   function set(key) { return e => setForm(f => ({ ...f, [key]: e.target.value })) }
 
-  function runAnalysis() {
-    setAnalyzing(true); setStepIdx(0); setProgress(0)
-    let i = 0, prog = 0
-    const stepId = setInterval(() => {
-      i++
-      if (i < ANALYZE_STEPS.length) setStepIdx(i)
-      else { clearInterval(stepId); onResult(computeResult(form)) }
-    }, 700)
-    const progId = setInterval(() => { prog += 1.4; setProgress(Math.min(prog, 97)) }, 60)
-    setTimeout(() => { clearInterval(progId); setProgress(100) }, ANALYZE_STEPS.length * 700 + 200)
+  async function runAnalysis() {
+    setAnalyzing(true); setError(''); setStepIdx(0); setProgress(0)
+    let i = 0
+    const stepId = setInterval(() => { if (++i < ANALYZE_STEPS.length) setStepIdx(i); else clearInterval(stepId) }, 700)
+    const progId = setInterval(() => setProgress(p => Math.min(p + 1.4, 97)), 60)
+    try {
+      // wait for both the API and the minimum animation time
+      const [result] = await Promise.all([analyze(form), new Promise(r => setTimeout(r, ANALYZE_STEPS.length * 700))])
+      setProgress(100)
+      onResult(result)
+    } catch (e) {
+      setError(e instanceof TypeError ? 'Could not reach the analysis service.' : e.message)
+      setAnalyzing(false)
+    } finally {
+      clearInterval(stepId); clearInterval(progId)
+    }
   }
 
   function handleSubmit(e) { e.preventDefault(); runAnalysis() }
@@ -361,6 +369,7 @@ function DetectPage({ initialData, onResult }) {
                   <p className="sub">Fill in what you know — the more detail, the more accurate the result.</p>
                 </div>
               </div>
+              {error && <div className="disclaimer" role="alert">❌ {error}</div>}
               <form onSubmit={handleSubmit} noValidate>
                 <div className="form-field">
                   <label>Job Title *</label>
@@ -432,10 +441,12 @@ function DetectPage({ initialData, onResult }) {
 
 /* ─── RESULT PAGE ──────────────────────────────────────────── */
 function ResultPage({ result, onCheckAnother, onHome }) {
-  const { verdict, pct, title, company, recruiter } = result
-  const checks  = getChecks(verdict, !!recruiter)
-  const signals = getSignals(verdict)
-  const steps   = getSteps(verdict)
+  const { verdict, pct, title, company, engine } = result
+  const trail   = result.trail || []
+  const draft   = result.draft_message || ''
+  const checks  = result.checks.map(c => ({ Icon: CHECK_ICONS[c.id], name: c.label, status: STATUS_LABEL[c.status], cls: c.status, note: c.note }))
+  const signals = result.signals.map(x => ({ dot: x.type, text: x.text }))
+  const steps   = result.next_steps.map((x, i) => ({ n: i + 1, title: x.title, sub: x.detail }))
   const verdictLabel = verdict === 'real' ? 'Real Job' : verdict === 'fake' ? 'Likely Fake' : 'Suspicious'
   const riskLabel    = verdict === 'real' ? 'Low risk' : verdict === 'fake' ? 'High risk'   : 'Medium risk'
   const VerdictIcon  = verdict === 'real' ? ShieldCheck : verdict === 'fake' ? ShieldX : ShieldAlert
@@ -466,7 +477,7 @@ function ResultPage({ result, onCheckAnother, onHome }) {
             </div>
             <div className="confidence-bar-wrap">
               <div className="bar-labels">
-                <span>Model confidence</span>
+                <span>Trust score</span>
                 <span className={`risk-badge risk-badge--${verdict}`}>{riskLabel}</span>
               </div>
               <div className="bar-track">
@@ -489,6 +500,7 @@ function ResultPage({ result, onCheckAnother, onHome }) {
                 </div>
                 <div className="check-name">{c.name}</div>
                 <div className={`check-status check-status--${c.cls}`}>{c.status}</div>
+                {c.note && <div className="check-name" title={c.note}>{c.note}</div>}
               </div>
             </Reveal>
           ))}
@@ -541,10 +553,33 @@ function ResultPage({ result, onCheckAnother, onHome }) {
           </Reveal>
         </div>
 
+        {trail.length > 0 && (
+          <Reveal>
+            <div className="signal-card" style={{ marginBottom: 20 }}>
+              <div className="card-title"><Search size={14} /> What the agent investigated</div>
+              <div className="card-sub">Live checks run for this posting.</div>
+              <ul className="signal-list">
+                {trail.map((t, i) => (<li key={i}><div className="dot dot--green" /><span><strong>{t.tool}</strong> {t.input}: {t.finding}</span></li>))}
+              </ul>
+            </div>
+          </Reveal>
+        )}
+
+        {draft && (
+          <Reveal>
+            <div className="signal-card" style={{ marginBottom: 20 }}>
+              <div className="card-title"><ArrowRight size={14} /> Message to verify the recruiter</div>
+              <div className="card-sub">Drafted by the agent. Copy and send it before sharing anything.</div>
+              <p style={{ whiteSpace: 'pre-wrap', fontSize: 13 }}>{draft}</p>
+              <button className="btn-secondary" style={{ marginTop: 12 }} onClick={() => navigator.clipboard.writeText(draft)}>Copy message</button>
+            </div>
+          </Reveal>
+        )}
+
         <Reveal>
           <div className="disclaimer">
             <AlertCircle size={13} style={{ flexShrink: 0, marginTop: 1 }} />
-            This result is generated by a machine learning model trained on job fraud datasets with 97.4% accuracy. It is not 100% guaranteed. Always use your own judgment before applying to any job or sharing personal information.
+            {engine === 'rules+agent' ? 'This result comes from rules plus an AI agent investigation' : 'This result comes from rules only'} and is a risk signal, not proof. It can be wrong. Always use your own judgment before applying to any job or sharing personal information.
           </div>
         </Reveal>
 
@@ -616,6 +651,15 @@ export default function App() {
   const [page,       setPage]       = useState('home')
   const [detectInit, setDetectInit] = useState(null)
   const [result,     setResult]     = useState(null)
+  const [gmailError, setGmailError] = useState('')
+
+  useEffect(() => {  // returning from Google's consent screen
+    const g = new URLSearchParams(window.location.search).get('gmail')
+    if (!g) return
+    window.history.replaceState({}, '', '/')
+    if (g === 'connected') setPage('inbox')
+    else setGmailError('Gmail sign-in was cancelled or failed.')
+  }, [])
 
   function goTo(id, init = null) {
     setPage(id); if (init) setDetectInit(init); window.scrollTo(0, 0)
@@ -643,7 +687,8 @@ export default function App() {
       </nav>
 
       <div className="page-anim" key={page}>
-        {page === 'home'   && <HomePage   onNavigate={goTo} />}
+        {page === 'home'   && <HomePage   onNavigate={goTo} gmailError={gmailError} />}
+        {page === 'inbox'  && <InboxPage  onNavigate={goTo} />}
         {page === 'detect' && <DetectPage initialData={detectInit} onResult={handleResult} />}
         {page === 'result' && result && <ResultPage result={result} onCheckAnother={handleCheckAnother} onHome={() => goTo('home')} />}
         {page === 'about'  && <AboutPage />}
