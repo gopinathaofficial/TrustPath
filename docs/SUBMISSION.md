@@ -30,15 +30,17 @@ React UI ──POST /api/v1/analyze──> FastAPI
 
 ## 3. How IBM Bob was used
 
-> TODO (team): fill this in honestly before submitting. The slides require it. List each task where IBM Bob did the work, with one line each. Suggested format:
+IBM Bob was used in a separate session to produce the project's **planning, architecture and code**. Bob's output was the starting point for this repository.
 
-| Area | What IBM Bob did | Evidence (commit/PR/screenshot) |
-|------|------------------|---------------------------------|
-| e.g. Backend scaffold | ... | ... |
-| e.g. Frontend UI | ... | ... |
-| e.g. Tests / refactor | ... | ... |
+| Area | What IBM Bob did | Evidence |
+|------|------------------|----------|
+| Planning | Product and implementation planning | TODO: link/screenshot of the Bob session |
+| Architecture | System design (frontend, API, detection approach) | TODO |
+| Code | Code generated in the Bob session | TODO: list files/commits |
 
-Runtime AI calls go through OpenRouter (consumer-facing agent). If any IBM watsonx technology is also used, list it here.
+> TODO (team): replace each TODO with a specific file, commit or screenshot. Judges can then verify the claim.
+
+Additional tooling, disclosed for transparency: the agentic `/analyze` endpoint (rules engine, OpenRouter tool-calling agent, tests), the wiring of the React UI to it, and these docs were implemented in a later session with the pi coding agent, following `docs/IMPLEMENTATION_PLAN.md`. Runtime AI calls go through OpenRouter.
 
 ## 4. Limitations (be upfront)
 
