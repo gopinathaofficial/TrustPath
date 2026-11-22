@@ -28,3 +28,24 @@ Job fraud detection. Paste a job posting and get a **Real / Suspicious / Fake** 
 `index.html` is a single-file UI (Home, Detect, About pages). Open it in a browser; no build step.
 
 The analysis is currently a **mock**: it flags keywords (e.g. `whatsapp`, `telegram`, `deposit`, `training fee`) and off-platform sources, then picks a random confidence in a band. The 97.4% accuracy and <10s figures shown in the UI are placeholders, not measured results.
+
+## Backend
+
+FastAPI boilerplate in `backend/`. No fraud-detection logic yet; it only has health and a placeholder in-memory `items` CRUD.
+
+```
+cd backend
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+uvicorn app.main:app --reload
+pytest
+```
+
+- Docs: http://localhost:8000/docs
+- `GET /` welcome message
+- `GET /api/v1/health` status, version, environment
+- `GET/POST /api/v1/items`, `GET/DELETE /api/v1/items/{id}` placeholder CRUD (in-memory)
+- Settings via `.env`: `PROJECT_NAME`, `ENVIRONMENT`, `DEBUG`, `API_V1_PREFIX`, `CORS_ORIGINS`
+
+The frontend is not yet wired to the API.
