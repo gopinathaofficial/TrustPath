@@ -139,88 +139,21 @@ const ANALYZE_STEPS = [
   { text: 'Calculating trust score…',          icon: '🔒' },
 ]
 
-const RED_FLAG_WORDS = ['whatsapp','telegram','gmail','deposit','training fee','pay','wire transfer','western union','urgent','work from home earn']
-const OFF_PLATFORM   = ['WhatsApp','Telegram','Email']
+const CHECK_ICONS  = { company: '🏢', posting: '📄', recruiter: '👤', channel: '💬', process: '⚙️' }
+const STATUS_LABEL = { pass: 'PASSED', warn: 'WARNING', fail: 'FAILED' }
 
-function computeResult(form) {
-  const desc = (form.description || '').toLowerCase()
-  const flagCount = RED_FLAG_WORDS.filter(f => desc.includes(f)).length
-  const offPlatform = OFF_PLATFORM.includes(form.source)
-  let verdict, pct
-  if (flagCount >= 2 || offPlatform) {
-    verdict = 'fake'; pct = 14 + Math.floor(Math.random() * 15)
-  } else if (flagCount === 1) {
-    verdict = 'suspicious'; pct = 48 + Math.floor(Math.random() * 15)
-  } else {
-    verdict = 'real'; pct = Math.min(82 + Math.floor(Math.random() * 15), 97)
-  }
-  return { verdict, pct, title: form.title || 'Job Posting', company: form.company || 'Unknown Company', recruiter: form.recruiter }
-}
-
-function getChecks(verdict, hasRecruiter) {
-  if (verdict === 'fake') return [
-    { icon: '🏢', name: 'Company Identity',  status: 'FAILED',     cls: 'fail' },
-    { icon: '📄', name: 'Job Posting',        status: 'RED FLAGS',  cls: 'fail' },
-    { icon: '👤', name: 'Recruiter',          status: 'FAKE',       cls: 'fail' },
-    { icon: '💬', name: 'Communication',      status: 'SUSPICIOUS', cls: 'fail' },
-    { icon: '⚙️', name: 'Hiring Process',     status: 'ABNORMAL',   cls: 'fail' },
-  ]
-  if (verdict === 'suspicious') return [
-    { icon: '🏢', name: 'Company Identity',  status: 'PARTIAL',    cls: 'warn' },
-    { icon: '📄', name: 'Job Posting',        status: 'WARNINGS',   cls: 'warn' },
-    { icon: '👤', name: 'Recruiter',          status: 'UNVERIFIED', cls: 'warn' },
-    { icon: '💬', name: 'Communication',      status: 'UNUSUAL',    cls: 'warn' },
-    { icon: '⚙️', name: 'Hiring Process',     status: 'NORMAL',     cls: 'pass' },
-  ]
-  return [
-    { icon: '🏢', name: 'Company Identity',  status: 'VERIFIED',   cls: 'pass' },
-    { icon: '📄', name: 'Job Posting',        status: 'CLEAN',      cls: 'pass' },
-    { icon: '👤', name: 'Recruiter',          status: hasRecruiter ? 'VERIFIED' : 'UNVERIFIED', cls: hasRecruiter ? 'pass' : 'warn' },
-    { icon: '💬', name: 'Communication',      status: 'NORMAL',     cls: 'pass' },
-    { icon: '⚙️', name: 'Hiring Process',     status: 'NORMAL',     cls: 'pass' },
-  ]
-}
-
-function getSignals(verdict) {
-  if (verdict === 'fake') return [
-    { dot: 'red', text: 'No verifiable company registration found' },
-    { dot: 'red', text: 'Recruiter using personal/free email domain' },
-    { dot: 'red', text: 'Upfront payment or deposit requested' },
-    { dot: 'red', text: 'Communication moved off official platform' },
-    { dot: 'red', text: 'Unusually high salary with no skill requirements' },
-  ]
-  if (verdict === 'suspicious') return [
-    { dot: 'red',   text: 'Recruiter domain could not be fully verified' },
-    { dot: 'red',   text: 'Some language patterns raise caution flags' },
-    { dot: 'green', text: 'Company appears to be a real registered entity' },
-    { dot: 'green', text: 'Job responsibilities are specific and realistic' },
-    { dot: 'green', text: 'No payment requests detected in description' },
-  ]
-  return [
-    { dot: 'green', text: 'Specific role requirements listed' },
-    { dot: 'green', text: 'Realistic and market-aligned salary range' },
-    { dot: 'green', text: 'Verifiable company name and location' },
-    { dot: 'green', text: 'Professional language and clear responsibilities' },
-    { dot: 'green', text: 'Standard benefits package described' },
-  ]
-}
-
-function getSteps(verdict) {
-  if (verdict === 'fake') return [
-    { n: '!', title: 'Do NOT apply or respond',  sub: 'Engaging further risks financial loss or identity theft.' },
-    { n: '2', title: 'Report the posting',        sub: 'Flag it on the platform where you found it.' },
-    { n: '3', title: 'Warn others',               sub: 'Share this result to protect fellow job seekers.' },
-  ]
-  if (verdict === 'suspicious') return [
-    { n: '1', title: 'Verify via official channels',  sub: 'Call the company directly using numbers from their official website.' },
-    { n: '2', title: "Check the recruiter's LinkedIn", sub: 'Confirm they are listed as an employee of the company.' },
-    { n: '3', title: 'Proceed with caution',           sub: 'Do not share sensitive documents until identity is confirmed.' },
-  ]
-  return [
-    { n: '1', title: 'Research the company',    sub: "Check Glassdoor, LinkedIn, and the company's official site." },
-    { n: '2', title: 'Tailor your application', sub: 'Customize your CV and cover letter to match the requirements.' },
-    { n: '3', title: 'Apply with confidence',   sub: 'This looks like a legitimate opportunity worth pursuing.' },
-  ]
+async function analyze(form) {
+  const res = await fetch('/api/v1/analyze', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      description: [form.description, form.salary && `Salary: ${form.salary}`, form.url && `Link: ${form.url}`].filter(Boolean).join('\n'),
+      title: form.title, company: form.company, recruiter_email: form.recruiter, source: form.source,
+    }),
+  })
+  if (!res.ok) throw new Error(res.status === 422 ? 'Please paste the job description.' : 'Analysis service error.')
+  const d = await res.json()
+  return { ...d, pct: d.trust_score, title: form.title || 'Job Posting', company: form.company || 'Unknown Company', recruiter: form.recruiter }
 }
 
 /* ─── SVG Confidence Ring ───────────────────────────────── */
@@ -273,7 +206,7 @@ function HomePage({ onNavigate }) {
         <Particles />
         <div className="hero-badge anim-badge">
           <span className="badge-pulse" />
-          🤖 AI-Powered · 97.4% Accuracy
+          🤖 AI-Assisted · Rules-Backed
         </div>
         <h1 className="hero-h1">
           Stop <span className="accent glow-text">Fake Jobs</span><br />
@@ -319,9 +252,9 @@ function HomePage({ onNavigate }) {
       <div className="stats-strip">
         {[
           { val: <Counter target={1} suffix=" in 7" />, lbl: 'Job postings are fraudulent' },
-          { val: <><Counter target={97} suffix="." /><span>4%</span></>, lbl: 'Model accuracy' },
+          { val: <span>AI + Rules</span>,             lbl: 'Hybrid detection engine' },
           { val: <Counter target={5} />,               lbl: 'Independent checks performed' },
-          { val: <span>&lt;10s</span>,                 lbl: 'Average analysis time' },
+          { val: <span>Seconds</span>,                lbl: 'Typical analysis time' },
         ].map((s, i) => (
           <Reveal key={i} delay={i * 80}>
             <div className="stat">
@@ -369,27 +302,28 @@ function DetectPage({ initialData, onResult }) {
   const [analyzing, setAnalyzing] = useState(false)
   const [stepIdx,   setStepIdx]   = useState(0)
   const [progress,  setProgress]  = useState(0)
+  const [error,     setError]     = useState('')
 
   useEffect(() => { if (initialData?.autoStart) runAnalysis() }, [])
 
   function set(key) { return e => setForm(f => ({ ...f, [key]: e.target.value })) }
 
-  function runAnalysis() {
-    setAnalyzing(true); setStepIdx(0); setProgress(0)
-    let i = 0, prog = 0
-    const stepId = setInterval(() => {
-      i++
-      if (i < ANALYZE_STEPS.length) setStepIdx(i)
-      else {
-        clearInterval(stepId)
-        onResult(computeResult(form))
-      }
-    }, 700)
-    const progId = setInterval(() => {
-      prog += 1.4
-      setProgress(Math.min(prog, 97))
-    }, 60)
-    setTimeout(() => { clearInterval(progId); setProgress(100) }, ANALYZE_STEPS.length * 700 + 200)
+  async function runAnalysis() {
+    setAnalyzing(true); setError(''); setStepIdx(0); setProgress(0)
+    let i = 0
+    const stepId = setInterval(() => { if (++i < ANALYZE_STEPS.length) setStepIdx(i); else clearInterval(stepId) }, 700)
+    const progId = setInterval(() => setProgress(p => Math.min(p + 1.4, 97)), 60)
+    try {
+      // wait for both the API and the minimum animation time
+      const [result] = await Promise.all([analyze(form), new Promise(r => setTimeout(r, ANALYZE_STEPS.length * 700))])
+      setProgress(100)
+      onResult(result)
+    } catch (e) {
+      setError(e instanceof TypeError ? 'Could not reach the analysis service.' : e.message)
+      setAnalyzing(false)
+    } finally {
+      clearInterval(stepId); clearInterval(progId)
+    }
   }
 
   function handleSubmit(e) { e.preventDefault(); runAnalysis() }
@@ -408,6 +342,7 @@ function DetectPage({ initialData, onResult }) {
                   <p className="sub">Fill in what you know — the more detail, the more accurate the result.</p>
                 </div>
               </div>
+              {error && <div className="disclaimer" role="alert">❌ {error}</div>}
               <form onSubmit={handleSubmit} noValidate>
                 <div className="form-field">
                   <label>Job Title *</label>
@@ -481,10 +416,12 @@ function DetectPage({ initialData, onResult }) {
 
 /* ─── RESULT PAGE ──────────────────────────────────────────── */
 function ResultPage({ result, onCheckAnother, onHome }) {
-  const { verdict, pct, title, company, recruiter } = result
-  const checks  = getChecks(verdict, !!recruiter)
-  const signals = getSignals(verdict)
-  const steps   = getSteps(verdict)
+  const { verdict, pct, title, company, engine } = result
+  const trail = result.trail || []
+  const draft = result.draft_message || ''
+  const checks  = result.checks.map(c => ({ icon: CHECK_ICONS[c.id], name: c.label, status: STATUS_LABEL[c.status], cls: c.status, note: c.note }))
+  const signals = result.signals.map(x => ({ dot: x.type, text: x.text }))
+  const steps   = result.next_steps.map((x, i) => ({ n: i + 1, title: x.title, sub: x.detail }))
   const verdictLabel = verdict === 'real' ? '✓ Real Job' : verdict === 'fake' ? '✗ Likely Fake' : '⚠ Suspicious'
   const riskLabel    = verdict === 'real' ? 'Low risk'  : verdict === 'fake' ? 'High risk'     : 'Medium risk'
 
@@ -513,7 +450,7 @@ function ResultPage({ result, onCheckAnother, onHome }) {
             </div>
             <div className="confidence-bar-wrap">
               <div className="bar-labels">
-                <span>Model confidence</span>
+                <span>Trust score</span>
                 <span className={`risk-badge risk-badge--${verdict}`}>{riskLabel}</span>
               </div>
               <div className="bar-track">
@@ -536,6 +473,7 @@ function ResultPage({ result, onCheckAnother, onHome }) {
                 </div>
                 <div className="check-name">{c.name}</div>
                 <div className={`check-status check-status--${c.cls}`}>{c.status}</div>
+                {c.note && <div className="check-name" title={c.note}>{c.note}</div>}
               </div>
             </Reveal>
           ))}
@@ -585,9 +523,32 @@ function ResultPage({ result, onCheckAnother, onHome }) {
           </Reveal>
         </div>
 
+        {trail.length > 0 && (
+          <Reveal>
+            <div className="signal-card" style={{ marginBottom: 20 }}>
+              <div className="card-title"><SearchIcon size={14} /> What the agent investigated</div>
+              <div className="card-sub">Live checks run for this posting.</div>
+              <ul className="signal-list">
+                {trail.map((t, i) => (<li key={i}><div className="dot dot--green" /><span><strong>{t.tool}</strong> {t.input}: {t.finding}</span></li>))}
+              </ul>
+            </div>
+          </Reveal>
+        )}
+
+        {draft && (
+          <Reveal>
+            <div className="signal-card" style={{ marginBottom: 20 }}>
+              <div className="card-title"><ArrowRightIcon size={14} /> Message to verify the recruiter</div>
+              <div className="card-sub">Drafted by the agent. Copy and send it before sharing anything.</div>
+              <p style={{ whiteSpace: 'pre-wrap', fontSize: 13 }}>{draft}</p>
+              <button className="btn-secondary" style={{ marginTop: 12 }} onClick={() => navigator.clipboard.writeText(draft)}>Copy message</button>
+            </div>
+          </Reveal>
+        )}
+
         <Reveal>
           <div className="disclaimer">
-            ⚠️ This result is generated by a machine learning model trained on job fraud datasets with 97.4% accuracy. It is not 100% guaranteed. Always use your own judgment before applying to any job or sharing personal information.
+            ⚠️ This result comes from {engine === 'rules+agent' ? 'rules plus an AI agent investigation' : 'rules only'} and is a risk signal, not proof. It can be wrong. Always use your own judgment before applying to any job or sharing personal information.
           </div>
         </Reveal>
 
