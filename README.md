@@ -1,5 +1,7 @@
 # TrustPath AI
 
+![TrustPath AI home screen](docs/home.png)
+
 Job fraud detection for job seekers. Paste a job posting and get a **Real / Suspicious / Fake** verdict, a confidence score, the signals behind it, and concrete next steps.
 
 > **Status: early prototype.** The UI is a clickable demo with a mock keyword-based verdict. The backend is an API scaffold with no detection logic yet. See [Status and roadmap](#status-and-roadmap).
